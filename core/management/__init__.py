@@ -30,17 +30,30 @@ class ManagementUtility:
             self.prog_name = "python -m web_scraper"
         self.settings_exception = None
 
+    def __prompt_for_subcommand(self):
+        while True:
+            user_choice = (
+                input(f"Choose a subcommand to run ({', '.join(SubcommandChoices.get_choices())}), or type 'exit' to quit:\n> ").strip().lower()
+            )
+
+            if user_choice == "exit":
+                sys.exit(0)
+            elif user_choice in SubcommandChoices.get_choices():
+                return user_choice
+            else:
+                print("❌ Invalid choice. Try again.\n")
+
     def __parse_args(self):
         parser = ArgumentParser(prog=self.prog_name)
         parser.description = "A web scraper tool to scrape images, links, emails, phone numbers, and addresses from a given URL."
 
-        subparser = parser.add_subparsers(title="subcommands", dest="subcommand")
-        subparser.add_parser(SubcommandChoices.IMAGES, help="scrape images from the website")
-        subparser.add_parser(SubcommandChoices.LINKS, help="scrape links from the website")
-        subparser.add_parser(SubcommandChoices.EMAILS, help="scrape emails from the website")
-        subparser.add_parser(SubcommandChoices.PHONES, help="scrape phone numbers from the website")
-        subparser.add_parser(SubcommandChoices.ADDRESS, help="scrape physical addresses from the website")
-        subparser.add_parser(SubcommandChoices.ALL, help="scrape all data from the website")
+        parser.add_argument(
+            "subcommand",
+            help="Subcommand to run",
+            choices=["images", "links", "emails", "phones", "address", "all"],
+            nargs="?",
+        )
+
         parser.add_argument(
             "URL",
             type=str,
@@ -68,25 +81,22 @@ class ManagementUtility:
             default="./data/",
             nargs="?",
         )
-        return parser.parse_args(self.argv[1:])
+        args = parser.parse_args(self.argv[1:])
+        return parser, args
 
     def execute(self):
         """Given the commande line arguments, figure out which subcommand is being run, create a parser to parse those arguments and then execute the subcommand."""
 
         # handle images only right now then add link , numbers of telephones, emails, address, etc
-        args = self.__parse_args()
-        while True:
-            user_choice = input(f"Choose a choice: {', '.join(SubcommandChoices.get_choices())}\n").strip().lower()
-            print(user_choice)
-            if user_choice == "exit":
-                break
-            elif user_choice not in SubcommandChoices.get_choices():
-                print("Invalid choice. Please try again.")
-                continue
-            else:
-                break
+        parser, args = self.__parse_args()
+        if not args.subcommand:
+            subcommand = self.__prompt_for_subcommand()
+            # Inject the subcommand into argv and re-parse
+            new_argv = [self.argv[0], subcommand] + self.argv[1:]
+            parser.set_defaults(subcommand=subcommand)
+            args = parser.parse_args(new_argv[1:])
 
-        if user_choice == SubcommandChoices.IMAGES:
+        if args.subcommand == SubcommandChoices.IMAGES:
             # handle_images(args)
             pass
 
