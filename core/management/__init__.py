@@ -1,6 +1,7 @@
 import sys
 from argparse import ArgumentParser
-
+import re
+from ..scrapper import Scraper
 
 class SubcommandChoices:
     """
@@ -42,6 +43,18 @@ class ManagementUtility:
                 return user_choice
             else:
                 print("❌ Invalid choice. Try again.\n")
+    
+    @staticmethod
+    def is_valid_url(url):
+        print(f"Validating URL: {url}")
+        pattern = re.compile(
+            r'^(https?|ftp):\/\/'
+            r'([a-zA-Z0-9.-]+)'
+            r'(\:[0-9]{1,5})?'
+            r'(\/[^\s]*)?$'
+        )
+        return re.match(pattern, url) is not None
+
 
     def __parse_args(self):
         parser = ArgumentParser(prog=self.prog_name)
@@ -91,15 +104,22 @@ class ManagementUtility:
         parser, args = self.__parse_args()
         if not args.subcommand:
             subcommand = self.__prompt_for_subcommand()
-            # Inject the subcommand into argv and re-parse
             new_argv = [self.argv[0], subcommand] + self.argv[1:]
             parser.set_defaults(subcommand=subcommand)
             args = parser.parse_args(new_argv[1:])
-
-        if args.subcommand == SubcommandChoices.IMAGES:
-            # handle_images(args)
-            pass
-
+        if self.is_valid_url(args.URL):
+            try:
+                from core.scrapper import Scraper
+            except ImportError:
+                print("❌ Scraper class not found. Please ensure core/scraper.py exists and contains a Scraper class.")
+                sys.exit(1)
+            scraper = Scraper(args)
+            scraper.run()
+        else:
+            print("❌ Invalid URL provided.")
+            sys.exit(1)
+            scraper.run()
+        
 
 def execute_from_command_line(argv=None):
     """A simple method that runs ManagementUtility."""
