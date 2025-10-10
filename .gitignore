@@ -1,7 +1,6 @@
 .venv/
 env/
 venv/
-.vscode/
 __pycache__/
 *.pyc
 *.pyo
@@ -9,3 +8,4 @@ __pycache__/
 .vev
 .devcontainer/
 .DS_Store
+.vscode/*
