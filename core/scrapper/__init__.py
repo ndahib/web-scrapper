@@ -3,13 +3,15 @@ from bs4 import BeautifulSoup
 import os
 from ..constants import SubcommandChoices, EXTENSIONS, USER_AGENT
 from urllib.parse import urljoin
+import re
 
 
 class Scraper:
     def __init__(self, args):
         self.args = args
+        self.emails_set = set()
 
-    def fetch_content(self, url):
+    def fetch_content(self, url) -> BeautifulSoup | None:
         try:
             headers = {
                 "User-Agent": USER_AGENT,
@@ -43,6 +45,32 @@ class Scraper:
             except requests.RequestException as e:
                 print(f"Error downloading image: {e}")
 
+    def scrape_emails(self, content: BeautifulSoup | None):
+        print("Scraping emails...")
+        if not content:
+            return
+        text = content.get_text()
+        emails = set(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text))
+        print(f"Found {len(emails)} emails in text.")
+        links = content.find_all("a", href=True)
+        for link in links:
+            href = link.get("href")
+            if isinstance(href, (list, tuple)):
+                href = href[0] if href else None
+            if not href or not isinstance(href, str):
+                continue
+            if href.startswith("mailto:"):
+                print(f"Processing link: {link}")
+                email = href.split("mailto:")[1].split("?")[0]
+                emails.add(email)
+        new_emails = emails - self.emails_set
+        self.emails_set.update(new_emails)
+        if new_emails and self.args.path:
+            with open(os.path.join(self.args.path, "emails.txt"), "a") as file:
+                print(f"Saving {len(new_emails)} new emails to {os.path.join(self.args.path, 'emails.txt')}")
+                for email in new_emails:
+                    file.write(email + "\n")
+
     def run(self, url=None, current_depth=0, visited=None):
         """Recursively scrape content from URLs."""
 
@@ -51,12 +79,9 @@ class Scraper:
         url = url or self.args.URL
         url = url.rstrip("/")
         if url in visited:
-            print(f"Already visited {url}, skipping.")
             return
         visited.add(url)
-        print(f"Scraping URL: {url} at depth {current_depth}")
         if self.args.recursive and current_depth >= self.args.level:
-            print(f"Maximum recursion depth reached: {current_depth}")
             return
 
         content = self.fetch_content(url)
@@ -67,7 +92,7 @@ class Scraper:
         elif subcommand == SubcommandChoices.LINKS:
             pass
         elif subcommand == SubcommandChoices.EMAILS:
-            pass
+            self.scrape_emails(content)
         elif subcommand == SubcommandChoices.PHONES:
             pass
         elif subcommand == SubcommandChoices.ADDRESS:
