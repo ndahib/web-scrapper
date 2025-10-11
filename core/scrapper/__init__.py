@@ -1,9 +1,12 @@
+import re
+import os
 import requests
 from bs4 import BeautifulSoup
-import os
-from ..constants import SubcommandChoices, EXTENSIONS, USER_AGENT
 from urllib.parse import urljoin
-import re
+from urllib.parse import urlparse
+from dns import resolver, exception
+from urllib.robotparser import RobotFileParser
+from ..constants import SubcommandChoices, EXTENSIONS, USER_AGENT
 
 
 class Scraper:
@@ -15,10 +18,8 @@ class Scraper:
         try:
             headers = {
                 "User-Agent": USER_AGENT,
+                "timeout": "10",
             }
-            # response = requests.options(self.args.URL, headers=headers)
-            # response.raise_for_status()
-            # if response.status_code == 200:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             return BeautifulSoup(response.text, "html.parser")
@@ -45,13 +46,29 @@ class Scraper:
             except requests.RequestException as e:
                 print(f"Error downloading image: {e}")
 
+    @classmethod
+    def dns_lookup(cls, domain):
+        try:
+            answers = resolver.resolve(domain, "MX", lifetime=5)
+            return bool(answers)
+        except resolver.NoAnswer:
+            try:
+                answers = resolver.resolve(domain, "A", lifetime=5)
+                return bool(answers)
+            except (resolver.NoAnswer, exception.Timeout, resolver.NXDOMAIN):
+                return False
+        except (exception.Timeout, resolver.NXDOMAIN):
+            return False
+        except exception.DNSException:
+            return False
+
     def scrape_emails(self, content: BeautifulSoup | None):
         print("Scraping emails...")
         if not content:
             return
         text = content.get_text()
         emails = set(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text))
-        print(f"Found {len(emails)} emails in text.")
+        # to remove later
         links = content.find_all("a", href=True)
         for link in links:
             href = link.get("href")
@@ -60,16 +77,72 @@ class Scraper:
             if not href or not isinstance(href, str):
                 continue
             if href.startswith("mailto:"):
-                print(f"Processing link: {link}")
+                print(f"Processing mailto link: {href}")
                 email = href.split("mailto:")[1].split("?")[0]
                 emails.add(email)
+
         new_emails = emails - self.emails_set
-        self.emails_set.update(new_emails)
-        if new_emails and self.args.path:
-            with open(os.path.join(self.args.path, "emails.txt"), "a") as file:
-                print(f"Saving {len(new_emails)} new emails to {os.path.join(self.args.path, 'emails.txt')}")
-                for email in new_emails:
+        valid_emails = set()
+        for email in new_emails:
+            domain = email.split("@")[-1]
+            if not self.dns_lookup(domain):
+                print(f"Invalid email domain, skipping: {email}")
+                continue
+            print(f"Valid email found: {email}")
+            valid_emails.add(email)
+        self.emails_set.update(valid_emails)
+        print(f"Found {len(valid_emails)} emails in text.")
+        if self.args.path and valid_emails:
+            emails_file = os.path.join(self.args.path, "emails.txt")
+            print(f"Saving {len(valid_emails)} unique emails to {emails_file}")
+            with open(emails_file, "a") as file:
+                for email in sorted(valid_emails):
                     file.write(email + "\n")
+
+    def check_robot_txt(self, url, user_agent: str = "*") -> bool:
+        parsed_url = urlparse(url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        robots_url = f"{base_url}/robots.txt"
+
+        rp = RobotFileParser()
+        rp.set_url(robots_url)
+        try:
+            rp.read()
+        except Exception as e:
+            print(f"Could not read robots.txt: {e}")
+            return True
+
+        return rp.can_fetch(user_agent, url)
+
+    def scrape_links(self, content, url):
+        print("scrapping links ....")
+        if not content:
+            return
+
+        links = content.find_all("a") if content else []
+        for link in links:
+            href = link.get("href")
+            if isinstance(href, (list, tuple)):
+                href = href[0] if href else None
+            if not href or not isinstance(href, str):
+                continue
+            href = href.split("#")[0]
+            full_url = href if href.startswith(("http://", "https://")) else urljoin(url, href)
+            links_file = os.path.join(self.args.path, "links.txt")
+            with open(links_file, "a") as file:
+                file.write(full_url + "\n")
+
+    def scrape_phones(self, content, url):
+        if not content:
+            return
+        print("scraping phone numbers...")
+        # need more work
+        text = content.get_text()
+        numbers = re.findall(r"(?:\+212|00212|0)[\d\.\-\s(\)]{8, 20}", text)
+        numbers_file = os.path.join(self.args.path, "numbers.txt")
+        for number in numbers:
+            with open(numbers_file, "a") as file:
+                file.write(number + "\n")
 
     def run(self, url=None, current_depth=0, visited=None):
         """Recursively scrape content from URLs."""
@@ -79,6 +152,9 @@ class Scraper:
         url = url or self.args.URL
         url = url.rstrip("/")
         if url in visited:
+            return
+        if not self.check_robot_txt(url):
+            print(f"Access to {url} is disallowed by robots.txt")
             return
         visited.add(url)
         if self.args.recursive and current_depth >= self.args.level:
@@ -90,15 +166,17 @@ class Scraper:
         if subcommand == SubcommandChoices.IMAGES:
             self.scrape_images(content, url)
         elif subcommand == SubcommandChoices.LINKS:
-            pass
+            self.scrape_links(content, url)
         elif subcommand == SubcommandChoices.EMAILS:
             self.scrape_emails(content)
         elif subcommand == SubcommandChoices.PHONES:
-            pass
+            self.scrape_phones(content, url)
         elif subcommand == SubcommandChoices.ADDRESS:
-            pass
+            print("Address scraping not implemented yet.")
         elif subcommand == SubcommandChoices.ALL:
-            pass
+            self.scrape_images(content, url)
+            self.scrape_emails(content)
+            self.scrape_links(content, url)
 
         if self.args.recursive and current_depth < self.args.level:
             links = content.find_all("a") if content else []
