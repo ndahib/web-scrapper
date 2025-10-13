@@ -7,6 +7,9 @@ from urllib.parse import urlparse
 from dns import resolver, exception
 from urllib.robotparser import RobotFileParser
 from ..constants import SubcommandChoices, EXTENSIONS, USER_AGENT
+from selenium import webdriver
+import base64
+import uuid
 
 
 class Scraper:
@@ -15,36 +18,67 @@ class Scraper:
         self.emails_set = set()
 
     def fetch_content(self, url) -> BeautifulSoup | None:
-        try:
-            headers = {
-                "User-Agent": USER_AGENT,
-                "timeout": "10",
-            }
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            return BeautifulSoup(response.text, "html.parser")
-        except requests.RequestException as e:
-            print(f"Error fetching URL content: {e}")
-            return None
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        driver = webdriver.Chrome(options=options)
+        driver.get(url)
+        content = driver.page_source
+        driver.quit()
+        return BeautifulSoup(content, "html.parser")
 
     def scrape_images(self, content, url):
+        print("Scraping images...")
         images = content.find_all("img") if content else []
+
         for img in images:
             image_src = img.get("src")
+            print("image_src", image_src)
             if not image_src:
                 continue
-            image_extension = os.path.splitext(os.path.basename(image_src))[-1].lower()
-            if image_extension not in EXTENSIONS:
+
+            if image_src.startswith("data:image/"):
+                self.save_base64_image(image_src)
                 continue
-            image_url = image_src if image_src.startswith("http") or image_src.startswith("https") else urljoin(url, image_src)
-            print(image_url)
-            try:
-                response = requests.get(image_url, headers={"User-Agent": USER_AGENT})
-                response.raise_for_status()
-                with open(os.path.join(self.args.path, os.path.basename(image_url)), "wb") as file:
-                    file.write(response.content)
-            except requests.RequestException as e:
-                print(f"Error downloading image: {e}")
+
+            self.save_image_from_url(image_src, url)
+
+    def save_base64_image(self, base64_str):
+        print("Found base64 image...")
+        try:
+            image_data = base64.b64decode(base64_str.split(",")[1])
+            image_extension = self.get_extension_from_base64(base64_str)
+            image_filename = f"image_{uuid.uuid4()}{image_extension}"
+            image_path = os.path.join(self.args.path, image_filename)
+
+            with open(image_path, "wb") as file:
+                file.write(image_data)
+            print(f"Saved base64 image as {image_filename}")
+        except Exception as e:
+            print(f"Error saving base64 image: {e}")
+
+    def get_extension_from_base64(self, base64_str):
+        """Guess the extension from the base64 string."""
+        mime_type = base64_str.split(";")[0].split("/")[1]
+        return f".{mime_type}"
+
+    def save_image_from_url(self, image_src, base_url):
+        image_extension = os.path.splitext(os.path.basename(image_src))[-1].lower()
+        if image_extension not in EXTENSIONS:
+            print(f"Skipping unsupported image extension: {image_extension}")
+            return
+
+        image_url = image_src if image_src.startswith("http") or image_src.startswith("https") else urljoin(base_url, image_src)
+        try:
+            response = requests.get(image_url, headers={"User-Agent": USER_AGENT})
+            response.raise_for_status()
+            image_filename = os.path.basename(image_url)
+            image_path = os.path.join(self.args.path, image_filename)
+
+            with open(image_path, "wb") as file:
+                file.write(response.content)
+            print(f"Saved image from URL: {image_filename}")
+        except requests.RequestException as e:
+            print(f"Error downloading image: {e}")
 
     @classmethod
     def dns_lookup(cls, domain):
@@ -103,7 +137,9 @@ class Scraper:
         parsed_url = urlparse(url)
         base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
         robots_url = f"{base_url}/robots.txt"
-
+        if not self.dns_lookup(parsed_url.netloc):
+            print(f"Invalid domain, skipping: {url}")
+            return True
         rp = RobotFileParser()
         rp.set_url(robots_url)
         try:
@@ -159,7 +195,7 @@ class Scraper:
         visited.add(url)
         if self.args.recursive and current_depth >= self.args.level:
             return
-
+        print("Waiting for browser...")
         content = self.fetch_content(url)
         subcommand = self.args.subcommand
 

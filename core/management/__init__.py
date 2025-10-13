@@ -78,8 +78,11 @@ class ManagementUtility:
     def execute(self):
         """Given the commande line arguments, figure out which subcommand is being run, create a parser to parse those arguments and then execute the subcommand."""
 
-        # handle images only right now then add link , numbers of telephones, emails, address, etc
         parser, args = self.__parse_args()
+        if len(self.argv) > 1 and self.argv[1] == "help":
+            parser.print_help()
+            sys.exit(0)
+
         if not args.subcommand:
             subcommand = self.__prompt_for_subcommand()
             new_argv = [self.argv[0], subcommand] + self.argv[1:]
@@ -102,5 +105,6 @@ class ManagementUtility:
 
 def execute_from_command_line(argv=None):
     """A simple method that runs ManagementUtility."""
+
     utility = ManagementUtility(argv)
     utility.execute()
