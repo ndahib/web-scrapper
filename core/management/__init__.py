@@ -100,7 +100,6 @@ class ManagementUtility:
         else:
             print("❌ Invalid URL provided.")
             sys.exit(1)
-            scraper.run()
 
 
 def execute_from_command_line(argv=None):

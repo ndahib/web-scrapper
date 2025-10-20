@@ -21,6 +21,7 @@ class Scraper:
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(60)
         driver.get(url)
         content = driver.page_source
         driver.quit()
