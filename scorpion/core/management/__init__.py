@@ -49,7 +49,7 @@ class ManagementUtility:
             parser.print_help()
             sys.exit(0)
         try:
-            from scorpion import Scorpion
+            from core.scorpion import Scorpion
 
             scorpion = Scorpion(args)
             scorpion.run()

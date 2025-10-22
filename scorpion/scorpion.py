@@ -1,5 +1,5 @@
 import sys
-from management import ManagementUtility
+from core.management import ManagementUtility
 
 
 class Scropion:
