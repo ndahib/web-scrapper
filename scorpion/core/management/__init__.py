@@ -1,5 +1,6 @@
 import sys
 from argparse import ArgumentParser
+from constants import color
 
 
 class ManagementUtility:
@@ -34,6 +35,13 @@ class ManagementUtility:
             help="modify metadata of all images",
         )
         parser.add_argument(
+            "-t",
+            "--tag",
+            type=str,
+            help="the tag to be deleted or modified, if specified, -d and -m will work on this tag only",
+            nargs="+",
+        )
+        parser.add_argument(
             "-f",
             "--file",
             type=str,
@@ -48,6 +56,9 @@ class ManagementUtility:
         if len(self.argv) > 1 and self.argv[1] == "help":
             parser.print_help()
             sys.exit(0)
+
+        if args.delete and args.modify and not args.tag and not args.file:
+            parser.error(f"{color.WARNING}You must specify either -t (tag) or -f (file) when using -d and -m.{color.RESET}")
         try:
             from core.scorpion import Scorpion
 
@@ -55,4 +66,7 @@ class ManagementUtility:
             scorpion.run()
         except ImportError:
             print("❌ Scorpion class not found. Please ensure core/scorpion.py exists and contains a Scorpion class.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ {e}")
             sys.exit(1)
