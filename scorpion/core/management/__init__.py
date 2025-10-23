@@ -1,6 +1,7 @@
 import sys
 from argparse import ArgumentParser
 from constants import color
+from core.scorpion import Scorpion
 
 
 class ManagementUtility:
@@ -52,15 +53,19 @@ class ManagementUtility:
 
     def excute(self):
         """Given the commande line arguments, figure out which subcommand is being run, create a parser to parse those arguments and then execute the subcommand."""
+
+        help_argument_exist = False
+        if self.argv[0] == "help":
+            help_argument_exist = True
+            
         parser, args = self.__parse_args()
-        if len(self.argv) > 1 and self.argv[1] == "help":
+        if len(self.argv) >= 1 and help_argument_exist:
             parser.print_help()
             sys.exit(0)
 
         if args.delete and args.modify and not args.tag and not args.file:
             parser.error(f"{color.WARNING}You must specify either -t (tag) or -f (file) when using -d and -m.{color.RESET}")
         try:
-            from core.scorpion import Scorpion
 
             scorpion = Scorpion(args)
             scorpion.run()
