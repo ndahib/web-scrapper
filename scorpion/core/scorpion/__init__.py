@@ -27,7 +27,7 @@ class Scorpion:
             image = Image.open(file)
             self._get_general_info(image)
         except FileNotFoundError as e:
-            print(f"File not found: {e}")
+            print(f"{color.WARNING}File not found: {e}{color.RESET}")
         exif_data = image.getexif()
 
         if not exif_data:
@@ -55,13 +55,17 @@ class Scorpion:
         self.table.add_row(["Access Date", os.path.getatime(file)])
         self.table.add_row(["File Permissions", os.stat(file).st_mode])
 
-    def _check_file(self, file) -> bool:
+    def _check_file(self, file: str) -> bool:
+        file_path = Path(file)
+        if not file_path.is_file():
+            print(f"{color.WARNING}Skipping non-file: {file}{color.RESET}")
+            return False
         if file.startswith("http://") or file.startswith("https://"):
             print(f"{color.WARNING}Skipping URL: {file}{color.RESET}")
             return False
         file_extension = os.path.splitext(file)[-1].lower()
         if file_extension not in EXTENSIONS:
-            print(f"Skipping unsupported image extension: {file_extension}")
+            print(f"{color.WARNING}Skipping unsupported file extension: {file_extension}{color.RESET}")
             return False
         return True
 
@@ -69,22 +73,18 @@ class Scorpion:
         for file in self.args.FILES:
             if not self._check_file(file):
                 continue
-            self._check_file(file)
             self._get_file_info(file)
             self._get_exif(file)
             self.table.add_divider()
             self.count += 1
 
         if self.table.rows != []:
-            print(self.table)
+            print(f"{color.INFO}{self.table}\n")
             print(f"{color.SUCCESS}Total files processed: {self.count}{color.RESET}")
 
     def _handle_delete(self):
-        pass
-
-    def _handle_modify(self):
         file = self.args.file
-        arguments_tags = self.args.tag
+        argument_tag = self.args.tag
 
         check = self._check_file(file)
         if not check:
@@ -92,18 +92,42 @@ class Scorpion:
         try:
             image = Image.open(file)
         except FileNotFoundError as e:
-            print(f"File not found: {e}")
+            print(f"{color.WARNING}File not found: {e}{color.RESET}")
+        exif_data = image.getexif()
+        for tag_id, value in exif_data.items():
+            exif_tag = TAGS.get(tag_id, tag_id)
+            if argument_tag == exif_tag:
+                del exif_data[tag_id]
+
+        image.save(file, exif=exif_data)
+        print(f"{color.SUCCESS}Deleted EXIF data {argument_tag} in {file}{color.RESET}")
+
+    def _handle_modify(self):
+        file = self.args.file
+        arguments_tags = self.args.tags
+        check = self._check_file(file)
+        if not check:
+            return
+        try:
+            image = Image.open(file)
+        except FileNotFoundError as e:
+            print(f"{color.WARNING}File not found: {e}{color.RESET}")
         exif_data = image.getexif()
         for tag_id, value in exif_data.items():
             exif_tag = TAGS.get(tag_id, tag_id)
             for argument_tag in arguments_tags:
                 if argument_tag == exif_tag:
-                    exif_data[tag_id] = [argument_tag("=")[1]]
+                    value = arguments_tags[argument_tag]
+                    exif_data[tag_id] = value
                     break
 
+        image.save(file, exif=exif_data)
+        print(f"{color.SUCCESS}Modified EXIF data in {file}{color.RESET}")
+
     def run(self):
-        self._print_info()
         if self.args.delete:
             self._handle_delete()
-        if self.args.modify:
+        elif self.args.modify:
             self._handle_modify()
+        else:
+            self._print_info()

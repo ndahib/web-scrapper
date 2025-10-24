@@ -30,36 +30,51 @@ class ManagementUtility:
             help="delete metadata of all images",
         )
         parser.add_argument(
+            "-t",
+            "--tag",
+            type=str,
+            help="the tag to be deleted, if specified, -d will work on this tag only",
+        )
+        parser.add_argument(
             "-m",
             "--modify",
             action="store_true",
             help="modify metadata of all images",
         )
         parser.add_argument(
-            "-t",
-            "--tag",
-            type=str,
-            help="the tag to be deleted or modified, if specified, -d and -m will work on this tag only",
-            nargs="+",
-        )
-        parser.add_argument(
             "-f",
             "--file",
             type=str,
-            help="the path of the image file to will be deleted or modified, if specified, -d and -m will work on this file only",
+            help="the path of the image file to will be deleted , if specified, -d  will work on this file only",
             nargs="?",
         )
-        return parser, parser.parse_args()
+        args = parser.parse_args()
+
+        if args.delete and (not args.tag or not args.file):
+            parser.error(f"{color.WARNING}You must specify either -t (tag) or -f (file) when using -d.{color.RESET}")
+
+        tags = {}
+        files = []
+
+        for arg in args.FILES:
+            if "=" in arg:
+                key, value = arg.split("=", 1)
+                tags[key] = value
+            else:
+                files.append(arg)
+
+        args.tags = tags if tags else None
+        args.FILES = files
+
+        return parser, args
 
     def excute(self):
         """Given the commande line arguments, figure out which subcommand is being run, create a parser to parse those arguments and then execute the subcommand."""
 
-        help_argument_exist = False
-        if self.argv[0] == "help":
-            help_argument_exist = True
-            
+        help_requested = self.argv[0].lower() == "help" if len(self.argv) >= 1 else False
+
         parser, args = self.__parse_args()
-        if len(self.argv) >= 1 and help_argument_exist:
+        if len(self.argv) >= 1 and help_requested:
             parser.print_help()
             sys.exit(0)
 
