@@ -46,7 +46,7 @@ A command-line tool to parse, delete, and modify image metadata. Useful for clea
 ### 🧰 Usage
 
 ```bash
-HELP [-h] [-d] [-t TAG] [-m] [-f [FILE]] FILES [FILES ...]
+HELP [FILES] [-h] [-d delete] [-t TAG] [-m modify] [-f file to be modified or deleted his exif]
 ```
 
 ### 📖 Description
@@ -59,9 +59,9 @@ Scorpion is designed to parse and manipulate image metadata (EXIF, IPTC, etc.). 
 |--------|-------------|
 | `FILES` | The image or list of images to be parsed |
 | `-h`, `--help` | Show help message and exit |
-| `-d`, `--delete` | Delete metadata of all images |
+| `-d`, `--delete` | Delete metadata of image|
 | `-t TAG`, `--tag TAG` | Delete only the specified metadata tag (used with `-d`) |
-| `-m`, `--modify` | Modify metadata of all images |
+| `-m`, `--modify` | Modify metadata of all images used with multiple tags [{key=value}]|
 | `-f [FILE]`, `--file [FILE]` | Specify a single image file to delete or modify metadata for |
 
 ---
@@ -91,8 +91,8 @@ HELP -d -t GPSInfo image.jpg
 ## ⚙️ Requirements
 
 - Python 3.8+
-- Requests, BeautifulSoup4 (for Spider)
-- Pillow or ExifTool (for Scorpion)
+- Selenium, BeautifulSoup4 (for Spider)
+- Pillow, prettytable (for Scorpion)
 
 ### Install dependencies:
 
